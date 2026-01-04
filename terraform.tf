@@ -7,6 +7,7 @@ terraform {
   }
 }
 
+
 provider "azurerm" {
   features {}
 }
@@ -16,3 +17,6 @@ resource "azurerm_resource_group" "example" {
   location = "West Europe"
 }
 
+variable "password" {
+  default = "abc123"
+}
