@@ -71,7 +71,7 @@ jobs:
           directory: ${{ env.TERRAFORM_WORKING_DIR }}
           framework: terraform
           output_format: cli,sarif
-          output_file_path: console,checkov.sarif
+          output_file_path: checkov.sarif
           soft_fail: false
         continue-on-error: true
 
