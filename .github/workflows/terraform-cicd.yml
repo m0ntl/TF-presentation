@@ -159,13 +159,20 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
+      - name: Azure CLI Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Terraform Init
         run: terraform init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        env:
-          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        # env:
+        #   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        #   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        #   AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           # ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           # ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
           # ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
