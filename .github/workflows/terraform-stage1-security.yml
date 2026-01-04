@@ -1,0 +1,101 @@
+name: Terraform Stage 1 - Security Scans
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  security-events: write
+  id-token: write
+
+env:
+  TF_VERSION: '1.14.3'
+  TERRAFORM_WORKING_DIR: '.'
+  TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+
+jobs:
+  # Stage 1.0: Detect changed environment folders
+  detect-changes:
+    name: Detect Changed Environments
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has-changes: ${{ steps.set-matrix.outputs.has-changes }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed environment folders
+        id: set-matrix
+        uses: ./.github/actions/detect-env-changes
+        with:
+          base-ref: main
+
+  # Stage 1.1: Run Terrascan on changed environment folders
+  terrascan:
+    name: Terrascan - ${{ matrix.environment }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Terrascan
+        uses: tenable/terrascan-action@main
+        with:
+          iac_type: 'terraform'
+          iac_version: 'v14'
+          policy_type: 'azure'
+          only_warn: true
+          sarif_upload: true
+          non_recursive: false
+          iac_dir: Environments/${{ matrix.environment }}
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: terrascan.sarif
+          category: terrascan-${{ matrix.environment }}
+
+  # Stage 1.2: Run Checkov on changed environment folders
+  checkov:
+    name: Checkov - ${{ matrix.environment }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        id: checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: Environments/${{ matrix.environment }}
+          framework: terraform
+          output_format: cli,sarif
+          output_file_path: checkov.sarif
+          soft_fail: false
+        continue-on-error: true
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: checkov.sarif
+          category: checkov-${{ matrix.environment }}
+
+      - name: Fail if Checkov found issues
+        if: steps.checkov.outcome == 'failure'
+        run: exit 1

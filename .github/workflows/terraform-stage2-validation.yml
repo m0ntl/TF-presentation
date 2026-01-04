@@ -1,0 +1,264 @@
+name: Terraform Stage 2 - Validation & Planning
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+
+permissions:
+  security-events: write
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VERSION: '1.14.3'
+  TERRAFORM_WORKING_DIR: '.'
+  TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+jobs:
+  # Stage 2.0: Detect changed environment folders
+  detect-changes:
+    name: Detect Changed Environments
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has-changes: ${{ steps.set-matrix.outputs.has-changes }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed environment folders
+        id: set-matrix
+        uses: ./.github/actions/detect-env-changes
+        with:
+          base-ref: ${{ github.event.pull_request.base.ref }}
+
+  # Stage 2.1: Run Terraform validate on PR
+  terraform-validate:
+    name: Terraform Validate - ${{ matrix.environment }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Azure CLI Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: terraform init -backend-config="key=${{ matrix.environment }}.tfstate"
+        working-directory: Environments/${{ matrix.environment }}
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+        working-directory: Environments/${{ matrix.environment }}
+        #continue-on-error: false
+
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: Environments/${{ matrix.environment }}
+
+  # Stage 2.2: Run Terraform tests on PR
+  terraform-test:
+    name: Terraform Tests - ${{ matrix.environment }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure CLI Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init
+        run: terraform init -backend-config="key=${{ matrix.environment }}.tfstate"
+        working-directory: Environments/${{ matrix.environment }}
+
+      - name: Terraform Test
+        run: |
+          if [ -d "tests" ]; then
+            terraform test
+          else
+            echo "No tests directory found, skipping tests"
+          fi
+        working-directory: Environments/${{ matrix.environment }}
+        continue-on-error: true
+
+  # Stage 2.3: Run Terraform plan and post to PR
+  terraform-plan:
+    name: Terraform Plan - ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    needs: [detect-changes, terraform-validate, terraform-test]
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Azure CLI Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Terraform Init
+        run: terraform init -backend-config="key=${{ matrix.environment }}.tfstate"
+        working-directory: Environments/${{ matrix.environment }}
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          terraform plan -out=tfplan -no-color -input=false
+          terraform show -no-color tfplan > plan_output.txt
+        working-directory: Environments/${{ matrix.environment }}
+        continue-on-error: true
+
+      - name: Upload Plan File
+        uses: actions/upload-artifact@v5
+        with:
+          name: terraform-plan-${{ matrix.environment }}-${{ github.event.pull_request.number }}
+          path: Environments/${{ matrix.environment }}/tfplan
+          retention-days: 1
+
+      - name: Post Plan to PR
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const planOutput = fs.readFileSync('Environments/${{ matrix.environment }}/plan_output.txt', 'utf8');
+            const truncatedPlan = planOutput.length > 65000 ? planOutput.substring(0, 65000) + '\n\n... (truncated)' : planOutput;
+            
+            const output = `### Terraform Plan 📋 - ${{ matrix.environment }}
+            
+            <details>
+            <summary>Show Plan</summary>
+            
+            \`\`\`terraform
+            ${truncatedPlan}
+            \`\`\`
+            
+            </details>
+            
+            **Plan Status:** ${{ steps.plan.outcome }}
+            **Environment:** ${{ matrix.environment }}
+            **Workflow:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            `;
+            
+            // Find existing comment for this environment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('### Terraform Plan 📋 - ${{ matrix.environment }}')
+            });
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: output
+              });
+            }
+
+  # Stage 2.4: Run Infracost analysis and post to PR
+  infracost:
+    name: Infracost Analysis - ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    needs: [detect-changes, terraform-validate, terraform-test]
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      # Install and setup Infracost CLI
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      # Checkout the base branch of the pull request (e.g. main/master).
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: '${{ github.event.pull_request.base.ref }}'
+      
+      # Generate Infracost JSON file as the baseline.
+      - name: Generate Infracost cost estimate baseline
+        run: |
+          infracost breakdown --path=Environments/${{ matrix.environment }} \
+                              --format=json \
+                              --out-file=/tmp/infracost-base-${{ matrix.environment }}.json
+
+      # Checkout the current PR branch so we can create a diff.
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      # Generate an Infracost diff and save it to a JSON file.
+      - name: Generate Infracost diff
+        run: |
+          infracost diff --path=Environments/${{ matrix.environment }} \
+            --format=json \
+            --compare-to=/tmp/infracost-base-${{ matrix.environment }}.json \
+            --out-file=/tmp/infracost-${{ matrix.environment }}.json
+      
+      # Post the Infracost comment to the PR.
+      - name: Post Infracost comment
+        run: |
+            infracost comment github --path=/tmp/infracost-${{ matrix.environment }}.json \
+              --repo=$GITHUB_REPOSITORY \
+              --github-token=${{ secrets.GITHUB_TOKEN }} \
+              --pull-request=${{ github.event.pull_request.number }} \
+              --tag=${{ matrix.environment }} \
+              --behavior=update

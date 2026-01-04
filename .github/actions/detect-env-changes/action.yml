@@ -1,0 +1,45 @@
+name: 'Detect Environment Changes'
+description: 'Detects which environment folders have changes and outputs a matrix for use in workflows'
+author: 'Your Team'
+
+inputs:
+  base-ref:
+    description: 'Base branch reference to compare against'
+    required: true
+  environments-path:
+    description: 'Path to environments folder'
+    required: false
+    default: 'Environments/'
+
+outputs:
+  matrix:
+    description: 'JSON matrix of changed environments'
+    value: ${{ steps.detect.outputs.matrix }}
+  has-changes:
+    description: 'Whether any environment changes were detected'
+    value: ${{ steps.detect.outputs.has-changes }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Detect changed environment folders
+      id: detect
+      shell: bash
+      run: |
+        # Get the base branch
+        git fetch origin ${{ inputs.base-ref }}:${{ inputs.base-ref }}
+        
+        # Find all environment folders that have changes
+        changed_folders=$(git diff --name-only origin/${{ inputs.base-ref }}...HEAD | grep "^${{ inputs.environments-path }}" | cut -d'/' -f2 | sort -u)
+        
+        # Build JSON array for matrix
+        if [ -z "$changed_folders" ]; then
+          echo "has-changes=false" >> $GITHUB_OUTPUT
+          echo "matrix={\"environment\":[]}" >> $GITHUB_OUTPUT
+          echo "No changes detected in ${{ inputs.environments-path }} folder"
+        else
+          echo "has-changes=true" >> $GITHUB_OUTPUT
+          matrix_json=$(echo "$changed_folders" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "matrix={\"environment\":$matrix_json}" >> $GITHUB_OUTPUT
+          echo "Changed environments: $changed_folders"
+        fi
