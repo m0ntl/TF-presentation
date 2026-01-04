@@ -1,345 +1,345 @@
-name: Terraform CI/CD Pipeline
+# name: Terraform CI/CD Pipeline
 
-on:
-  push:
-    branches-ignore:
-      - main
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches:
-      - main
+# on:
+#   push:
+#     branches-ignore:
+#       - main
+#   pull_request:
+#     types: [opened, synchronize, reopened]
+#     branches:
+#       - main
 
-permissions:
-  security-events: write
-  id-token: write
+# permissions:
+#   security-events: write
+#   id-token: write
 
-env:
-  TF_VERSION: '1.14.3'
-  TERRAFORM_WORKING_DIR: '.'
-  TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+# env:
+#   TF_VERSION: '1.14.3'
+#   TERRAFORM_WORKING_DIR: '.'
+#   TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
 
-jobs:
-  # Stage 1.1: Run Terrascan on feature branch push
-  terrascan:
-    name: Terrascan Security Scan
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+# jobs:
+#   # Stage 1.1: Run Terrascan on feature branch push
+#   terrascan:
+#     name: Terrascan Security Scan
+#     runs-on: ubuntu-latest
+#     if: github.event_name == 'push'
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
 
-      - name: Run Terrascan
-        uses: tenable/terrascan-action@main
-        with:
-          iac_type: 'terraform'
-          iac_version: 'v14'
-          policy_type: 'azure'
-          only_warn: true
-          sarif_upload: true
-          non_recursive: false
-          iac_dir: ${{ env.TERRAFORM_WORKING_DIR }}
+#       - name: Run Terrascan
+#         uses: tenable/terrascan-action@main
+#         with:
+#           iac_type: 'terraform'
+#           iac_version: 'v14'
+#           policy_type: 'azure'
+#           only_warn: true
+#           sarif_upload: true
+#           non_recursive: false
+#           iac_dir: ${{ env.TERRAFORM_WORKING_DIR }}
 
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: terrascan.sarif
+#       - name: Upload SARIF file
+#         uses: github/codeql-action/upload-sarif@v4
+#         if: always()
+#         with:
+#           sarif_file: terrascan.sarif
 
-  # Stage 1.2: Run Checkov on feature branch push
-  checkov:
-    name: Checkov Security Scan
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+#   # Stage 1.2: Run Checkov on feature branch push
+#   checkov:
+#     name: Checkov Security Scan
+#     runs-on: ubuntu-latest
+#     if: github.event_name == 'push'
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
 
-      - name: Run Checkov
-        id: checkov
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          directory: ${{ env.TERRAFORM_WORKING_DIR }}
-          framework: terraform
-          output_format: cli,sarif
-          output_file_path: checkov.sarif
-          soft_fail: false
-        continue-on-error: true
+#       - name: Run Checkov
+#         id: checkov
+#         uses: bridgecrewio/checkov-action@v12
+#         with:
+#           directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#           framework: terraform
+#           output_format: cli,sarif
+#           output_file_path: checkov.sarif
+#           soft_fail: false
+#         continue-on-error: true
 
-      - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v4
-        if: always()
-        with:
-          sarif_file: checkov.sarif
+#       - name: Upload SARIF file
+#         uses: github/codeql-action/upload-sarif@v4
+#         if: always()
+#         with:
+#           sarif_file: checkov.sarif
 
-      - name: Fail if Checkov found issues
-        if: steps.checkov.outcome == 'failure'
-        run: exit 1
+#       - name: Fail if Checkov found issues
+#         if: steps.checkov.outcome == 'failure'
+#         run: exit 1
 
-  # Stage 2.1: Run Terraform validate on PR
-  terraform-validate:
-    name: Terraform Validate
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+#   # Stage 2.1: Run Terraform validate on PR
+#   terraform-validate:
+#     name: Terraform Validate
+#     runs-on: ubuntu-latest
+#     if: github.event_name == 'pull_request'
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Terraform Init
-        run: terraform init -backend=false
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#       - name: Terraform Init
+#         run: terraform init -backend=false
+#         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
 
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        continue-on-error: true
+#       - name: Terraform Format Check
+#         run: terraform fmt -check -recursive
+#         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#         continue-on-error: true
 
-      - name: Terraform Validate
-        run: terraform validate
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#       - name: Terraform Validate
+#         run: terraform validate
+#         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
 
-  # Stage 2.2: Run Terraform tests on PR
-  terraform-test:
-    name: Terraform Tests
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+#   # Stage 2.2: Run Terraform tests on PR
+#   terraform-test:
+#     name: Terraform Tests
+#     runs-on: ubuntu-latest
+#     if: github.event_name == 'pull_request'
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Terraform Init
-        run: terraform init -backend=false
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#       - name: Terraform Init
+#         run: terraform init -backend=false
+#         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
 
-      - name: Terraform Test
-        run: |
-          if [ -d "tests" ]; then
-            terraform test
-          else
-            echo "No tests directory found, skipping tests"
-          fi
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        continue-on-error: true
+#       - name: Terraform Test
+#         run: |
+#           if [ -d "tests" ]; then
+#             terraform test
+#           else
+#             echo "No tests directory found, skipping tests"
+#           fi
+#         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#         continue-on-error: true
 
-  # Stage 2.3: Run Terraform plan and post to PR
-  terraform-plan:
-    name: Terraform Plan
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    needs: [terraform-validate, terraform-test]
-    env:
-      ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-    permissions:
-      contents: read
-      pull-requests: write
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+#   # Stage 2.3: Run Terraform plan and post to PR
+#   terraform-plan:
+#     name: Terraform Plan
+#     runs-on: ubuntu-latest
+#     if: github.event_name == 'pull_request'
+#     needs: [terraform-validate, terraform-test]
+#     env:
+#       ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+#     permissions:
+#       contents: read
+#       pull-requests: write
+#       id-token: write
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: ${{ env.TF_VERSION }}
+#           terraform_wrapper: false
 
-      - name: Azure CLI Login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#       - name: Azure CLI Login
+#         uses: azure/login@v2
+#         with:
+#           client-id: ${{ secrets.AZURE_CLIENT_ID }}
+#           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+#           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#       - name: Terraform Init
+#         run: terraform init
+#         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
 
-      - name: Terraform Plan
-        id: plan
-        run: |
-          terraform plan -out=tfplan -no-color -input=false
-          terraform show -no-color tfplan > plan_output.txt
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        continue-on-error: true
+#       - name: Terraform Plan
+#         id: plan
+#         run: |
+#           terraform plan -out=tfplan -no-color -input=false
+#           terraform show -no-color tfplan > plan_output.txt
+#         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#         continue-on-error: true
 
-      - name: Upload Plan File
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan-${{ github.event.pull_request.number }}
-          path: ${{ env.TERRAFORM_WORKING_DIR }}/tfplan
-          retention-days: 30
+#       - name: Upload Plan File
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: terraform-plan-${{ github.event.pull_request.number }}
+#           path: ${{ env.TERRAFORM_WORKING_DIR }}/tfplan
+#           retention-days: 30
 
-      - name: Post Plan to PR
-        uses: actions/github-script@v7
-        if: always()
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            const planOutput = fs.readFileSync('${{ env.TERRAFORM_WORKING_DIR }}/plan_output.txt', 'utf8');
-            const truncatedPlan = planOutput.length > 65000 ? planOutput.substring(0, 65000) + '\n\n... (truncated)' : planOutput;
+#       - name: Post Plan to PR
+#         uses: actions/github-script@v7
+#         if: always()
+#         with:
+#           github-token: ${{ secrets.GITHUB_TOKEN }}
+#           script: |
+#             const fs = require('fs');
+#             const planOutput = fs.readFileSync('${{ env.TERRAFORM_WORKING_DIR }}/plan_output.txt', 'utf8');
+#             const truncatedPlan = planOutput.length > 65000 ? planOutput.substring(0, 65000) + '\n\n... (truncated)' : planOutput;
             
-            const output = `### Terraform Plan 📋
+#             const output = `### Terraform Plan 📋
             
-            <details>
-            <summary>Show Plan</summary>
+#             <details>
+#             <summary>Show Plan</summary>
             
-            \`\`\`terraform
-            ${truncatedPlan}
-            \`\`\`
+#             \`\`\`terraform
+#             ${truncatedPlan}
+#             \`\`\`
             
-            </details>
+#             </details>
             
-            **Plan Status:** ${{ steps.plan.outcome }}
-            **Workflow:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            `;
+#             **Plan Status:** ${{ steps.plan.outcome }}
+#             **Workflow:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+#             `;
             
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
+#             // Find existing comment
+#             const { data: comments } = await github.rest.issues.listComments({
+#               owner: context.repo.owner,
+#               repo: context.repo.repo,
+#               issue_number: context.issue.number,
+#             });
             
-            const botComment = comments.find(comment => {
-              return comment.user.type === 'Bot' && comment.body.includes('### Terraform Plan')
-            });
+#             const botComment = comments.find(comment => {
+#               return comment.user.type === 'Bot' && comment.body.includes('### Terraform Plan')
+#             });
             
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: output
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: output
-              });
-            }
+#             if (botComment) {
+#               await github.rest.issues.updateComment({
+#                 owner: context.repo.owner,
+#                 repo: context.repo.repo,
+#                 comment_id: botComment.id,
+#                 body: output
+#               });
+#             } else {
+#               await github.rest.issues.createComment({
+#                 owner: context.repo.owner,
+#                 repo: context.repo.repo,
+#                 issue_number: context.issue.number,
+#                 body: output
+#               });
+#             }
 
-  # Stage 2.4: Run Infracost analysis and post to PR
-  infracost:
-    name: Infracost Analysis
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    needs: [terraform-validate, terraform-test]
-    permissions:
-      contents: read
-      pull-requests: write
-      id-token: write
-    steps:
-      # Install and setup Infracost CLI
-      - name: Setup Infracost
-        uses: infracost/actions/setup@v3
-        with:
-          api-key: ${{ secrets.INFRACOST_API_KEY }}
+#   # Stage 2.4: Run Infracost analysis and post to PR
+#   infracost:
+#     name: Infracost Analysis
+#     runs-on: ubuntu-latest
+#     if: github.event_name == 'pull_request'
+#     needs: [terraform-validate, terraform-test]
+#     permissions:
+#       contents: read
+#       pull-requests: write
+#       id-token: write
+#     steps:
+#       # Install and setup Infracost CLI
+#       - name: Setup Infracost
+#         uses: infracost/actions/setup@v3
+#         with:
+#           api-key: ${{ secrets.INFRACOST_API_KEY }}
 
-      # Checkout the base branch of the pull request (e.g. main/master).
-      - name: Checkout base branch
-        uses: actions/checkout@v4
-        with:
-          ref: '${{ github.event.pull_request.base.ref }}'
+#       # Checkout the base branch of the pull request (e.g. main/master).
+#       - name: Checkout base branch
+#         uses: actions/checkout@v4
+#         with:
+#           ref: '${{ github.event.pull_request.base.ref }}'
       
-      # Generate Infracost JSON file as the baseline.
-      - name: Generate Infracost cost estimate baseline
-        run: |
-          infracost breakdown --path=${{ env.TERRAFORM_WORKING_DIR }} \
-                              --format=json \
-                              --out-file=/tmp/infracost-base.json
+#       # Generate Infracost JSON file as the baseline.
+#       - name: Generate Infracost cost estimate baseline
+#         run: |
+#           infracost breakdown --path=${{ env.TERRAFORM_WORKING_DIR }} \
+#                               --format=json \
+#                               --out-file=/tmp/infracost-base.json
 
-      # Checkout the current PR branch so we can create a diff.
-      - name: Checkout PR branch
-        uses: actions/checkout@v4
+#       # Checkout the current PR branch so we can create a diff.
+#       - name: Checkout PR branch
+#         uses: actions/checkout@v4
 
-      # Generate an Infracost diff and save it to a JSON file.
-      - name: Generate Infracost diff
-        run: |
-          infracost diff --path=${{ env.TERRAFORM_WORKING_DIR }} \
-            --format=json \
-            --compare-to=/tmp/infracost-base.json \
-            --out-file=/tmp/infracost.json
+#       # Generate an Infracost diff and save it to a JSON file.
+#       - name: Generate Infracost diff
+#         run: |
+#           infracost diff --path=${{ env.TERRAFORM_WORKING_DIR }} \
+#             --format=json \
+#             --compare-to=/tmp/infracost-base.json \
+#             --out-file=/tmp/infracost.json
       
-      # Post the Infracost comment to the PR.
-      - name: Post Infracost comment
-        run: |
-            infracost comment github --path=/tmp/infracost.json \
-              --repo=$GITHUB_REPOSITORY \
-              --github-token=${{ secrets.GITHUB_TOKEN }} \
-              --pull-request=${{ github.event.pull_request.number }} \
-              --behavior=update
+#       # Post the Infracost comment to the PR.
+#       - name: Post Infracost comment
+#         run: |
+#             infracost comment github --path=/tmp/infracost.json \
+#               --repo=$GITHUB_REPOSITORY \
+#               --github-token=${{ secrets.GITHUB_TOKEN }} \
+#               --pull-request=${{ github.event.pull_request.number }} \
+#               --behavior=update
 
-  # Stage 3: Run Terraform apply after manual approval
-  terraform-apply:
-    name: Terraform Apply
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
-    needs: [terraform-plan, infracost]
-    environment:
-      name: production
-      url: https://github.com/${{ github.repository }}
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+#   # Stage 3: Run Terraform apply after manual approval
+#   terraform-apply:
+#     name: Terraform Apply
+#     runs-on: ubuntu-latest
+#     if: github.event_name == 'pull_request' && github.event.action != 'closed'
+#     needs: [terraform-plan, infracost]
+#     environment:
+#       name: production
+#       url: https://github.com/${{ github.repository }}
+#     permissions:
+#       contents: read
+#       pull-requests: write
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v3
+#         with:
+#           terraform_version: ${{ env.TF_VERSION }}
       
-      - name: Azure CLI Login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+#       - name: Azure CLI Login
+#         uses: azure/login@v2
+#         with:
+#           client-id: ${{ secrets.AZURE_CLIENT_ID }}
+#           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+#           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#       - name: Terraform Init
+#         run: terraform init
+#         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
 
-      - name: Download Plan File
-        uses: actions/download-artifact@v4
-        with:
-          name: terraform-plan-${{ github.event.pull_request.number }}
-          path: ${{ env.TERRAFORM_WORKING_DIR }}
+#       - name: Download Plan File
+#         uses: actions/download-artifact@v4
+#         with:
+#           name: terraform-plan-${{ github.event.pull_request.number }}
+#           path: ${{ env.TERRAFORM_WORKING_DIR }}
 
-      - name: Terraform Apply
-        id: apply
-        run: terraform apply -auto-approve -input=false tfplan
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+#       - name: Terraform Apply
+#         id: apply
+#         run: terraform apply -auto-approve -input=false tfplan
+#         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
 
-      - name: Post Apply Result to PR
-        uses: actions/github-script@v7
-        if: always()
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const output = `### Terraform Apply 🚀
+#       - name: Post Apply Result to PR
+#         uses: actions/github-script@v7
+#         if: always()
+#         with:
+#           github-token: ${{ secrets.GITHUB_TOKEN }}
+#           script: |
+#             const output = `### Terraform Apply 🚀
             
-            **Apply Status:** ${{ steps.apply.outcome }}
-            **Workflow:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            **Approved by:** @${{ github.actor }}
-            `;
+#             **Apply Status:** ${{ steps.apply.outcome }}
+#             **Workflow:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+#             **Approved by:** @${{ github.actor }}
+#             `;
             
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: output
-            });
+#             await github.rest.issues.createComment({
+#               owner: context.repo.owner,
+#               repo: context.repo.repo,
+#               issue_number: context.issue.number,
+#               body: output
+#             });
