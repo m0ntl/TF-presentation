@@ -87,7 +87,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: terraform-plan-${{ matrix.environment }}-${{ github.event.pull_request.number }}
-          path: Environments/${{ matrix.environment }}
+          path: Environments/${{ matrix.environment }}/tfplan
 
       - name: Terraform Apply
         id: apply
