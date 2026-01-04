@@ -19,6 +19,11 @@ provider "azurerm" {
   features {}
 }
 
+variable "tenant_id" {
+  type        = string
+  description = "Tenant ID for KV auth"
+}
+
 resource "azurerm_resource_group" "example" {
   name     = "example-resources"
   location = "West Europe"
@@ -31,19 +36,20 @@ resource "azurerm_virtual_network" "example" {
   resource_group_name = azurerm_resource_group.example.name
 }
 
-resource "azurerm_key_vault" "example" {
-  name                        = "examkeyvaultadam"
-  location                    = azurerm_resource_group.example.location
-  resource_group_name         = azurerm_resource_group.example.name
-  enabled_for_disk_encryption = true
-  tenant_id                   = var.tenant_id
-  soft_delete_retention_days  = 7
-  purge_protection_enabled    = false
-
-  sku_name = "standard"
+resource "azurerm_user_assigned_identity" "example" {
+  location            = azurerm_resource_group.example.location
+  name                = "example-identity"
+  resource_group_name = azurerm_resource_group.example.name
 }
 
-variable "tenant_id" {
-  type        = string
-  description = "Tenant ID for KV auth"
+resource "azurerm_cdn_frontdoor_profile" "example" {
+  name                     = "example-cdn-profile-adam"
+  resource_group_name      = azurerm_resource_group.example.name
+  sku_name                 = "Premium_AzureFrontDoor"
+  response_timeout_seconds = 120
+
+  identity {
+    type         = "SystemAssigned, UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.example.id]
+  }
 }
