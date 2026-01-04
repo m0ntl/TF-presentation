@@ -10,7 +10,7 @@ terraform {
     storage_account_name = "tfpipestatestorage"
     container_name       = "state"
     #key                  = "terraform.tfstate"
-    use_azuread_auth     = true
+    use_azuread_auth = true
   }
 }
 
