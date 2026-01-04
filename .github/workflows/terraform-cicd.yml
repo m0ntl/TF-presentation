@@ -12,17 +12,6 @@ on:
 permissions:
   security-events: write
   id-token: write
-  # actions: read|write|none
-  # checks: read|write|none
-  # contents: read|write|none
-  # deployments: read|write|none
-  # issues: read|write|none
-  # discussions: read|write|none
-  # packages: read|write|none
-  # pages: read|write|none
-  # pull-requests: read|write|none
-  # repository-projects: read|write|none
-  # statuses: read|write|none
 
 env:
   TF_VERSION: '1.14.3'
@@ -170,14 +159,6 @@ jobs:
       - name: Terraform Init
         run: terraform init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        # env:
-        #   AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-        #   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        #   AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          # ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          # ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          # ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          # ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
 
       - name: Terraform Plan
         id: plan
@@ -185,11 +166,6 @@ jobs:
           terraform plan -out=tfplan -no-color -input=false
           terraform show -no-color tfplan > plan_output.txt
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          #ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
         continue-on-error: true
 
       - name: Upload Plan File
@@ -260,10 +236,18 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      id-token: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Azure CLI Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -278,22 +262,17 @@ jobs:
       - name: Terraform Init
         run: terraform init
         working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          #ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
 
       - name: Generate Infracost JSON
         run: |
           infracost breakdown --path=${{ env.TERRAFORM_WORKING_DIR }} \
             --format=json \
             --out-file=/tmp/infracost.json
-        env:
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          #ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+        # env:
+        #   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+        #   #ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+        #   ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+        #   ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
 
       - name: Post Infracost Comment
         run: |
