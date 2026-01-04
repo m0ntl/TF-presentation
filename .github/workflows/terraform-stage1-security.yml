@@ -37,7 +37,7 @@ jobs:
   # Stage 1.1: Run Terrascan on changed environment folders
   terrascan:
     name: Terrascan - ${{ matrix.environment }}
-    needs: detect-changes
+    needs: [detect-changes, terraform-fmt]
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -68,7 +68,7 @@ jobs:
   # Stage 1.2: Run Checkov on changed environment folders
   checkov:
     name: Checkov - ${{ matrix.environment }}
-    needs: detect-changes
+    needs: [detect-changes, terraform-fmt]
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
