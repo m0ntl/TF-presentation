@@ -26,20 +26,24 @@ runs:
       id: detect
       shell: bash
       run: |
+        set -e
+        
         # Get the base branch
-        git fetch origin ${{ inputs.base-ref }}:${{ inputs.base-ref }}
+        git fetch origin ${{ inputs.base-ref }}:${{ inputs.base-ref }} || true
         
         # Find all environment folders that have changes
-        changed_folders=$(git diff --name-only origin/${{ inputs.base-ref }}...HEAD | grep "^${{ inputs.environments-path }}" | cut -d'/' -f2 | sort -u)
+        changed_folders=$(git diff --name-only origin/${{ inputs.base-ref }}...HEAD | grep "^${{ inputs.environments-path }}" | cut -d'/' -f2 | sort -u || true)
         
         # Build JSON array for matrix
         if [ -z "$changed_folders" ]; then
           echo "has-changes=false" >> $GITHUB_OUTPUT
           echo "matrix={\"environment\":[]}" >> $GITHUB_OUTPUT
           echo "No changes detected in ${{ inputs.environments-path }} folder"
+          exit 0
         else
           echo "has-changes=true" >> $GITHUB_OUTPUT
           matrix_json=$(echo "$changed_folders" | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "matrix={\"environment\":$matrix_json}" >> $GITHUB_OUTPUT
           echo "Changed environments: $changed_folders"
+          exit 0
         fi
