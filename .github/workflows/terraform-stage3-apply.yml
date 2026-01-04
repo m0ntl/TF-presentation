@@ -15,6 +15,7 @@ env:
   TF_VERSION: '1.14.3'
   TERRAFORM_WORKING_DIR: '.'
   TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
 
 jobs:
   # Stage 3.0: Detect changed environment folders
