@@ -1,4 +1,4 @@
-name: Terraform Stage 1 - Security Scans
+name: Terraform Stage 1 - Security Standards and Formatting
 
 on:
   push:
@@ -37,7 +37,7 @@ jobs:
   # Stage 1.1: Run Terrascan on changed environment folders
   terrascan:
     name: Terrascan - ${{ matrix.environment }}
-    needs: detect-changes
+    needs: [detect-changes, terraform-fmt]
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -68,7 +68,7 @@ jobs:
   # Stage 1.2: Run Checkov on changed environment folders
   checkov:
     name: Checkov - ${{ matrix.environment }}
-    needs: detect-changes
+    needs: [detect-changes, terraform-fmt]
     if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
     strategy:
@@ -99,3 +99,19 @@ jobs:
       - name: Fail if Checkov found issues
         if: steps.checkov.outcome == 'failure'
         run: exit 1
+
+  # Stage 1.3: Run Terraform Format Check on root folder
+  terraform-fmt:
+    name: Terraform Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Format Check
+        run: terraform fmt -recursive -check

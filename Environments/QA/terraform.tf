@@ -6,11 +6,6 @@ terraform {
     }
   }
   backend "azurerm" {
-    resource_group_name  = "state-storage"
-    storage_account_name = "tfpipestatestorage"
-    container_name       = "state"
-    #key                  = "terraform.tfstate"
-    use_azuread_auth = true
   }
 }
 
@@ -37,7 +32,7 @@ resource "azurerm_virtual_network" "example" {
 }
 
 resource "azurerm_public_ip" "example" {
-  count               = 5
+  count               = 1
   name                = "qa-adam-example-pip-${count.index}"
   resource_group_name = azurerm_resource_group.example.name
   location            = azurerm_resource_group.example.location
