@@ -61,7 +61,7 @@ jobs:
       matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
       fail-fast: false
     environment:
-      name: production-${{ matrix.environment }}
+      name: deploy
       url: https://github.com/${{ github.repository }}
     steps:
       - name: Checkout code
