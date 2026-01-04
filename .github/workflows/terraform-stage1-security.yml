@@ -30,24 +30,9 @@ jobs:
 
       - name: Detect changed environment folders
         id: set-matrix
-        run: |
-          # Get the default branch (main)
-          git fetch origin main:main
-          
-          # Find all environment folders that have changes
-          changed_folders=$(git diff --name-only origin/main...HEAD | grep "^Environments/" | cut -d'/' -f2 | sort -u)
-          
-          # Build JSON array for matrix
-          if [ -z "$changed_folders" ]; then
-            echo "has-changes=false" >> $GITHUB_OUTPUT
-            echo "matrix={\"environment\":[]}" >> $GITHUB_OUTPUT
-            echo "No changes detected in Environments folder"
-          else
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-            matrix_json=$(echo "$changed_folders" | jq -R -s -c 'split("\n") | map(select(length > 0))')
-            echo "matrix={\"environment\":$matrix_json}" >> $GITHUB_OUTPUT
-            echo "Changed environments: $changed_folders"
-          fi
+        uses: ./.github/actions/detect-env-changes
+        with:
+          base-ref: main
 
   # Stage 1.1: Run Terrascan on changed environment folders
   terrascan:
