@@ -241,12 +241,12 @@ jobs:
       pull-requests: write
       id-token: write
     steps:
-      - name: Azure CLI Login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      # - name: Azure CLI Login
+      #   uses: azure/login@v2
+      #   with:
+      #     client-id: ${{ secrets.AZURE_CLIENT_ID }}
+      #     tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+      #     subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -274,7 +274,9 @@ jobs:
 
       - name: print infracost result for debugging
         run: cat /tmp/infracost-base.json
-      
+      - name: print terraform BASE state  for debugging
+        run: cat ${{ env.TERRAFORM_WORKING_DIR }}/terraform.tf
+
       # Checkout the current PR branch so we can create a diff.
       - name: Checkout PR branch
         uses: actions/checkout@v4
@@ -286,6 +288,11 @@ jobs:
                           --format=json \
                           --compare-to=/tmp/infracost-base.json \
                           --out-file=/tmp/infracost.json
+      
+      - name: print infracost comparison result for debugging
+        run: cat /tmp/infracost.json
+      - name: print terraform PR state for debugging
+        run: cat ${{ env.TERRAFORM_WORKING_DIR }}/terraform.tf
 
       - name: Post Infracost comment
         run: |
