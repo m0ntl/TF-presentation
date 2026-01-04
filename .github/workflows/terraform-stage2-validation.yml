@@ -168,14 +168,14 @@ jobs:
         continue-on-error: true
 
       - name: Upload Plan File
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v5
         with:
           name: terraform-plan-${{ matrix.environment }}-${{ github.event.pull_request.number }}
           #path: Environments/${{ matrix.environment }}/tfplan
           retention-days: 1
 
       - name: Post Plan to PR
-        uses: actions/github-script@v5
+        uses: actions/github-script@v7
         if: always()
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
