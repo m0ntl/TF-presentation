@@ -171,7 +171,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: terraform-plan-${{ matrix.environment }}-${{ github.event.pull_request.number }}
-          #path: Environments/${{ matrix.environment }}/tfplan
+          path: Environments/${{ matrix.environment }}/tfplan
           retention-days: 1
 
       - name: Post Plan to PR
