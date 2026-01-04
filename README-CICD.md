@@ -26,8 +26,10 @@ After manual approval through GitHub Environment:
 Add the following secrets to your repository (`Settings` → `Secrets and variables` → `Actions`):
 
 ```
-AWS_ACCESS_KEY_ID          # AWS credentials for Terraform
-AWS_SECRET_ACCESS_KEY      # AWS credentials for Terraform
+ARM_CLIENT_ID              # Azure Service Principal Application ID
+ARM_CLIENT_SECRET          # Azure Service Principal Password
+ARM_SUBSCRIPTION_ID        # Azure Subscription ID
+ARM_TENANT_ID              # Azure Tenant ID
 INFRACOST_API_KEY          # Get free API key from https://www.infracost.io/
 ```
 
@@ -124,6 +126,11 @@ Manual Approval Required     │
 ### Infracost Not Working
 - Verify `INFRACOST_API_KEY` is set correctly
 - Check that Terraform backend is properly configured
+
+### Azure Authentication Issues
+- Verify all four ARM_* secrets are set correctly
+- Ensure the Service Principal has appropriate permissions on the subscription
+- Check that the Service Principal is not expired
 
 ### Apply Not Triggering
 - Ensure `production` environment is configured with reviewers
