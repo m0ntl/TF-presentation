@@ -81,6 +81,10 @@ jobs:
         with:
           sarif_file: checkov.sarif
 
+      - name: Fail if Checkov found issues
+        if: steps.checkov.outcome == 'failure'
+        run: exit 1
+
   # Stage 2.1: Run Terraform validate on PR
   terraform-validate:
     name: Terraform Validate
