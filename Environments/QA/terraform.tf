@@ -21,11 +21,11 @@ provider "azurerm" {
 
 variable "tenant_id" {
   type        = string
-  description = "Tenant ID for KV auth"
+  description = "Tenant ID"
 }
 
 resource "azurerm_resource_group" "example" {
-  name     = "example-resources"
+  name     = "example-resources-qa"
   location = "West Europe"
 }
 
@@ -38,7 +38,7 @@ resource "azurerm_virtual_network" "example" {
 
 resource "azurerm_public_ip" "example" {
   count               = 5
-  name                = "adam-example-pip-${count.index}"
+  name                = "qa-adam-example-pip-${count.index}"
   resource_group_name = azurerm_resource_group.example.name
   location            = azurerm_resource_group.example.location
   allocation_method   = "Static"
