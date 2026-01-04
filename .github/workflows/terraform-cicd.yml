@@ -260,29 +260,56 @@ jobs:
         uses: infracost/actions/setup@v3
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
-
-      - name: Generate Infracost JSON
+      
+      # Checkout the base branch of the pull request (e.g. main/master).
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: '${{ github.event.pull_request.base.ref }}'
+      
+      # Generate Infracost JSON file as the baseline.
+      - name: Generate Infracost cost estimate baseline
         run: |
-          infracost breakdown --path=${{ env.TERRAFORM_WORKING_DIR }} \
-            --format=json \
-            --out-file=/tmp/infracost.json
-        # env:
-        #   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-        #   #ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-        #   ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-        #   ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          infracost breakdown --path=. \
+                              --format=json \
+                              --out-file=/tmp/infracost-base.json
 
-      - name: Post Infracost Comment
+      # Checkout the current PR branch so we can create a diff.
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+
+      # Generate an Infracost diff and save it to a JSON file.
+      - name: Generate Infracost diff
         run: |
-          infracost comment github --path=/tmp/infracost.json \
-            --repo=$GITHUB_REPOSITORY \
-            --github-token=${{ secrets.GITHUB_TOKEN }} \
-            --pull-request=${{ github.event.pull_request.number }} \
-            --behavior=update
+          infracost diff --path=. \
+                          --format=json \
+                          --compare-to=/tmp/infracost-base.json \
+                          --out-file=/tmp/infracost.json
+
+      - name: Post Infracost comment
+        run: |
+            infracost comment github --path=/tmp/infracost.json \
+                                     --repo=$GITHUB_REPOSITORY \
+                                     --github-token=${{ secrets.GITHUB_TOKEN }} \
+                                     --pull-request=${{ github.event.pull_request.number }} \
+                                     --behavior=update
+      # - name: Terraform Init
+      #   run: terraform init
+      #   working-directory: ${{ env.TERRAFORM_WORKING_DIR }}
+
+      # - name: Generate Infracost JSON
+      #   run: |
+      #     infracost breakdown --path=${{ env.TERRAFORM_WORKING_DIR }} \
+      #       --format=json \
+      #       --out-file=/tmp/infracost.json
+
+      # - name: Post Infracost Comment
+      #   run: |
+      #     infracost comment github --path=/tmp/infracost.json \
+      #       --repo=$GITHUB_REPOSITORY \
+      #       --github-token=${{ secrets.GITHUB_TOKEN }} \
+      #       --pull-request=${{ github.event.pull_request.number }} \
+      #       --behavior=update
 
   # Stage 3: Run Terraform apply after manual approval
   terraform-apply:
