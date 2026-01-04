@@ -45,15 +45,15 @@ jobs:
           iac_version: 'v14'
           policy_type: 'azure'
           only_warn: true
-          #sarif_upload: true
+          sarif_upload: true
           non_recursive: false
           iac_dir: ${{ env.TERRAFORM_WORKING_DIR }}
 
-      # - name: Upload SARIF file
-      #   uses: github/codeql-action/upload-sarif@v3
-      #   if: always()
-      #   with:
-      #     sarif_file: terrascan.sarif
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: terrascan.sarif
 
   # Stage 1.2: Run Checkov on feature branch push
   checkov:
