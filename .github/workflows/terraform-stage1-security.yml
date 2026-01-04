@@ -15,10 +15,49 @@ env:
   TF_VAR_tenant_id: ${{ secrets.AZURE_TENANT_ID }}
 
 jobs:
-  # Stage 1.1: Run Terrascan on feature branch push
-  terrascan:
-    name: Terrascan Security Scan
+  # Stage 1.0: Detect changed environment folders
+  detect-changes:
+    name: Detect Changed Environments
     runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has-changes: ${{ steps.set-matrix.outputs.has-changes }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed environment folders
+        id: set-matrix
+        run: |
+          # Get the default branch (main)
+          git fetch origin main:main
+          
+          # Find all environment folders that have changes
+          changed_folders=$(git diff --name-only origin/main...HEAD | grep "^Environments/" | cut -d'/' -f2 | sort -u)
+          
+          # Build JSON array for matrix
+          if [ -z "$changed_folders" ]; then
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+            echo "matrix={\"environment\":[]}" >> $GITHUB_OUTPUT
+            echo "No changes detected in Environments folder"
+          else
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            matrix_json=$(echo "$changed_folders" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "matrix={\"environment\":$matrix_json}" >> $GITHUB_OUTPUT
+            echo "Changed environments: $changed_folders"
+          fi
+
+  # Stage 1.1: Run Terrascan on changed environment folders
+  terrascan:
+    name: Terrascan - ${{ matrix.environment }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -32,18 +71,24 @@ jobs:
           only_warn: true
           sarif_upload: true
           non_recursive: false
-          iac_dir: ${{ env.TERRAFORM_WORKING_DIR }}
+          iac_dir: Environments/${{ matrix.environment }}
 
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: terrascan.sarif
+          category: terrascan-${{ matrix.environment }}
 
-  # Stage 1.2: Run Checkov on feature branch push
+  # Stage 1.2: Run Checkov on changed environment folders
   checkov:
-    name: Checkov Security Scan
+    name: Checkov - ${{ matrix.environment }}
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
     runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.detect-changes.outputs.matrix) }}
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -52,7 +97,7 @@ jobs:
         id: checkov
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: ${{ env.TERRAFORM_WORKING_DIR }}
+          directory: Environments/${{ matrix.environment }}
           framework: terraform
           output_format: cli,sarif
           output_file_path: checkov.sarif
@@ -64,6 +109,7 @@ jobs:
         if: always()
         with:
           sarif_file: checkov.sarif
+          category: checkov-${{ matrix.environment }}
 
       - name: Fail if Checkov found issues
         if: steps.checkov.outcome == 'failure'
