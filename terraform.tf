@@ -5,6 +5,11 @@ terraform {
       version = "~> 4.0"
     }
   }
+  backend "azurerm" {
+    storage_account_name = "tfpipestatestorage"
+    container_name       = "state"
+    key                  = "terraform.tfstate"
+  }
 }
 
 
