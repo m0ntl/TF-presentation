@@ -36,20 +36,10 @@ resource "azurerm_virtual_network" "example" {
   resource_group_name = azurerm_resource_group.example.name
 }
 
-resource "azurerm_user_assigned_identity" "example" {
-  location            = azurerm_resource_group.example.location
-  name                = "example-identity"
+resource "azurerm_public_ip" "example" {
+  count               = 5
+  name                = "adam-example-pip-${count.index}"
   resource_group_name = azurerm_resource_group.example.name
-}
-
-resource "azurerm_cdn_frontdoor_profile" "example" {
-  name                     = "example-cdn-profile-adam"
-  resource_group_name      = azurerm_resource_group.example.name
-  sku_name                 = "Premium_AzureFrontDoor"
-  response_timeout_seconds = 120
-
-  identity {
-    type         = "SystemAssigned, UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.example.id]
-  }
+  location            = azurerm_resource_group.example.location
+  allocation_method   = "Static"
 }
