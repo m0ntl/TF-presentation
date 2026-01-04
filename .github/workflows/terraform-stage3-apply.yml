@@ -84,7 +84,7 @@ jobs:
         working-directory: Environments/${{ matrix.environment }}
 
       - name: Download Plan File
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v5
         with:
           name: terraform-plan-${{ matrix.environment }}-${{ github.event.pull_request.number }}
           #path: Environments/${{ matrix.environment }}/tfplan
