@@ -195,18 +195,8 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const path = require('path');
-            const planFilePath = path.join('${{ github.workspace }}', '${{ env.TERRAFORM_WORKING_DIR }}', 'plan_output.txt');
-            
-            let planOutput = '';
-            let truncatedPlan = '';
-            
-            if (fs.existsSync(planFilePath)) {
-              planOutput = fs.readFileSync(planFilePath, 'utf8');
-              truncatedPlan = planOutput.length > 65000 ? planOutput.substring(0, 65000) + '\n\n... (truncated)' : planOutput;
-            } else {
-              truncatedPlan = 'Plan file not found. The terraform plan may have failed.';
-            }
+            const planOutput = fs.readFileSync('${{ env.TERRAFORM_WORKING_DIR }}/plan_output.txt', 'utf8');
+            const truncatedPlan = planOutput.length > 65000 ? planOutput.substring(0, 65000) + '\n\n... (truncated)' : planOutput;
             
             const output = `### Terraform Plan 📋
             
