@@ -25,3 +25,4 @@ resource "azurerm_resource_group" "example" {
 }
 
 //Adding comment
+//Adding comment 2
